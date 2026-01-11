@@ -16,6 +16,7 @@ local defaultWalkSpeed
 local runService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local Window = Library:CreateWindow({
 	Title = "Kintama Hack",
@@ -923,16 +924,9 @@ OtherBox:AddToggle("ChestEspToggle", {
 	Text = "Chest esp"
 })
 
--- Assuming disableFunctions is a table defined elsewhere in your script
--- If not, add: local disableFunctions = {}
-
--- ESP Functions (place these at the top or where appropriate)
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
-local LocalPlayer = Players.LocalPlayer
-local ESP_OBJECTS = {}
+local LocalPlayer = player
 local ESPConnection
 
 local function WorldToScreen(Position)
@@ -942,28 +936,24 @@ end
 
 local function CreateDrawings()
 	local Drawings = {}
-
 	Drawings.Box = Drawing.new("Square")
 	Drawings.Box.Color = Color3.fromRGB(255, 255, 255)
 	Drawings.Box.Thickness = 2
 	Drawings.Box.Filled = false
 	Drawings.Box.Transparency = 1
 	Drawings.Box.Visible = false
-
 	Drawings.HealthBg = Drawing.new("Square")
 	Drawings.HealthBg.Color = Color3.fromRGB(0, 0, 0)
 	Drawings.HealthBg.Thickness = 1
 	Drawings.HealthBg.Filled = true
 	Drawings.HealthBg.Transparency = 0.7
 	Drawings.HealthBg.Visible = false
-
 	Drawings.HealthFill = Drawing.new("Square")
 	Drawings.HealthFill.Color = Color3.fromRGB(0, 255, 0)
 	Drawings.HealthFill.Thickness = 1
 	Drawings.HealthFill.Filled = true
 	Drawings.HealthFill.Transparency = 1
 	Drawings.HealthFill.Visible = false
-
 	Drawings.DistanceText = Drawing.new("Text")
 	Drawings.DistanceText.Color = Color3.fromRGB(255, 255, 255)
 	Drawings.DistanceText.Size = 14
@@ -972,7 +962,14 @@ local function CreateDrawings()
 	Drawings.DistanceText.OutlineColor = Color3.fromRGB(0, 0, 0)
 	Drawings.DistanceText.Center = true
 	Drawings.DistanceText.Visible = false
-
+	Drawings.NameText = Drawing.new("Text")
+	Drawings.NameText.Color = Color3.fromRGB(255, 255, 255)
+	Drawings.NameText.Size = 14
+	Drawings.NameText.Font = 2
+	Drawings.NameText.Outline = true
+	Drawings.NameText.OutlineColor = Color3.fromRGB(0, 0, 0)
+	Drawings.NameText.Center = true
+	Drawings.NameText.Visible = false
 	return Drawings
 end
 
@@ -981,54 +978,46 @@ local function UpdateESP(PlayerData, LocalRoot)
 	local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
 	local Head = Character and Character:FindFirstChild("Head")
 	local RootPart = Character and Character:FindFirstChild("HumanoidRootPart")
-
 	if not (Character and Humanoid and Head and RootPart and LocalRoot) then
 		return false
 	end
-
 	local HealthPercent = math.clamp(Humanoid.Health / Humanoid.MaxHealth, 0, 1)
-
 	local TopPoint, TopOnScreen, TopInFront = WorldToScreen(Head.Position + Vector3.new(0, 1, 0))
 	local BottomPoint, BottomOnScreen, BottomInFront = WorldToScreen(RootPart.Position - Vector3.new(0, 3, 0))
-
 	local Drawings = PlayerData.drawings
-
 	if not (TopOnScreen and BottomOnScreen and TopInFront and BottomInFront) then
 		Drawings.Box.Visible = false
 		Drawings.HealthBg.Visible = false
 		Drawings.HealthFill.Visible = false
 		Drawings.DistanceText.Visible = false
+		Drawings.NameText.Visible = false
 		return true
 	end
-
 	local BoxHeight = math.abs(BottomPoint.Y - TopPoint.Y)
 	local BoxWidth = BoxHeight / 2
 	local BoxX = TopPoint.X - BoxWidth / 2
 	local BoxY = TopPoint.Y
-
 	Drawings.Box.Position = Vector2.new(BoxX, BoxY)
 	Drawings.Box.Size = Vector2.new(BoxWidth, BoxHeight)
 	Drawings.Box.Visible = true
-
 	local BarX = BoxX - 8
 	local BarWidth = 4
 	local BarHeight = BoxHeight
-
 	Drawings.HealthBg.Position = Vector2.new(BarX, BoxY)
 	Drawings.HealthBg.Size = Vector2.new(BarWidth, BarHeight)
 	Drawings.HealthBg.Visible = true
-
 	local FillHeight = BarHeight * HealthPercent
 	local FillY = BoxY + BarHeight - FillHeight
 	Drawings.HealthFill.Position = Vector2.new(BarX + 1, FillY)
 	Drawings.HealthFill.Size = Vector2.new(BarWidth - 2, FillHeight)
 	Drawings.HealthFill.Visible = true
-
 	local Distance = (RootPart.Position - LocalRoot.Position).Magnitude
 	Drawings.DistanceText.Text = tostring(math.floor(Distance)) .. " studs"
 	Drawings.DistanceText.Position = Vector2.new(TopPoint.X, BoxY - 18)
 	Drawings.DistanceText.Visible = true
-
+	Drawings.NameText.Text = PlayerData.player.Name
+	Drawings.NameText.Position = Vector2.new(TopPoint.X, BoxY - 36)
+	Drawings.NameText.Visible = true
 	return true
 end
 
@@ -1076,7 +1065,7 @@ OtherBox:AddToggle("PlayerEspToggle", {
 	Callback = function(Value)
 		if Value then
 			if not ESPConnection then
-				ESPConnection = RunService.RenderStepped:Connect(ESPLoop)
+				ESPConnection = runService.RenderStepped:Connect(ESPLoop)
 			end
 			local LocalCharacter = LocalPlayer.Character
 			local LocalRootPart = LocalCharacter and LocalCharacter:FindFirstChild("HumanoidRootPart")
