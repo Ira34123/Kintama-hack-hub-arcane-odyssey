@@ -16,6 +16,8 @@ local defaultWalkSpeed
 local runService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+
 local Players = game:GetService("Players")
 
 local Window = Library:CreateWindow({
@@ -29,6 +31,7 @@ local Window = Library:CreateWindow({
 local Tabs = {
 	Main = Window:AddTab('Main'),
 	Op = Window:AddTab('Op'),
+	Randoms = Window:AddTab("Random stuff"),
 	['UI Settings'] = Window:AddTab('UI Settings'),
 }
 
@@ -116,6 +119,8 @@ local godModeTask
 local autoFishConn
 local ESPConnection
 local ESP_OBJECTS = {}
+local MeatToggle
+local killAllBoats
 
 local disableFunctions = {
 	AttackToggle = function()
@@ -240,8 +245,19 @@ local disableFunctions = {
 				ESPConnection:Disconnect()
 				ESPConnection = nil
 			end
+		end,
+	MeatFarmToggle = function()
+		if MeatToggle then
+			task.cancel(MeatToggle)
 		end
-
+		MeatToggle = nil
+	end,
+	KillAllBoats = function()
+		if killAllBoats then
+			task.cancel(killAllBoats)
+		end
+		killAllBoats = nil
+	end,
 }
 -----
 
@@ -250,6 +266,7 @@ local MovementBox = Tabs.Main:AddRightGroupbox("Movement")
 local OtherBox = Tabs.Main:AddLeftGroupbox("Other")
 local LeftOpBox = Tabs.Op:AddLeftGroupbox('Op')
 local RightOpBox = Tabs.Op:AddRightGroupbox('Item Stats')
+local LeftRandomBox = Tabs.Randoms:AddLeftGroupbox('Stuff')
 
 LeftGroupBox:AddInput("TeleportName",
 	{
@@ -1219,7 +1236,7 @@ OtherBox:AddToggle("DarkSeaEsp", {
 			disableFunctions["DarkSeaEsp"]()
 		end
 	end,
-}):AddKeyPicker("ChestEspToggleKey", {
+}):AddKeyPicker("DarkseaEspToggleKey", {
 	Default = "",
 	SyncToggleState = true,
 	Text = "Darksea esp"
@@ -1843,6 +1860,209 @@ LeftOpBox:AddToggle("BoatKillAura", {
 	Text = "Boat Kill Aura"
 })
 
+local boatsDamaged = {}
+LeftOpBox:AddToggle("KillAllBoats", {
+	Text = "Kill all boats",
+	Tooltip = "Kill all boats in games except for players",
+	Default = false,
+	Callback = function(Value)
+		if Value then
+			if not character then return nil end
+
+			local hrp = character:FindFirstChild("HumanoidRootPart")
+			if not hrp then return nil end
+			killAllBoats = task.spawn(function()
+				while task.wait(0.3) do
+					local function getClosestBoat()
+						local bestDist = math.huge
+						local closestBoat
+						for _, boat in ipairs(game.ReplicatedStorage.RS.UnloadNPCShips:GetChildren()) do
+							if boat:IsA("Model") then
+					
+								local primaryPart = boat.PrimaryPart
+								if not primaryPart then
+									continue
+								end
+								if boat:FindFirstChild("OwnerPlayer") then continue end
+
+								local dura = boat:FindFirstChild("Dura") 
+								if not dura or dura.Value <= 0 then
+									boatsDamaged[boat] = nil
+									continue
+								end
+								if boatsDamaged[boat] and boatsDamaged[boat] > 50 then
+									continue
+								end
+
+								local distance = (primaryPart.Position - hrp.Position).Magnitude
+								if distance < bestDist then
+									bestDist = distance
+									closestBoat = boat
+								end
+							end
+						end
+						return closestBoat
+					end
+					local boat = getClosestBoat()
+					for i = 1, 500 do
+						local args = {
+							0,
+							character,
+							boat,
+							player.Backpack:FindFirstChild(Options.FightingStyleBox.Value),
+							"Attack"
+						}
+						game.ReplicatedStorage.RS.Remotes.Combat.DealDamageBoat3:FireServer(unpack(args))
+						task.wait()
+					end
+					if boatsDamaged[boat] then
+						boatsDamaged[boat] += 1
+					else
+						boatsDamaged[boat] = 1
+					end
+				end
+			end)
+		else
+			disableFunctions["KillAllBoats"]()
+		end
+	end,
+})
+
+LeftRandomBox:AddDropdown("MeatType", {
+	Values = {
+	"Terasavros", "Kynatos", "Pnevma", "Krystoros", "Thymos", "Shadow Wolf", "Blood Tiger", "Spined Crocodile", "Armored Bear", "Stonetusk Boar", "Black Boar", "Boar", "Crocodile", "Panther", "White Tiger", "Tiger", "White Wolf", "Brown Wolf", "Wolf", "Monos Alpha Bear", "Ancient Cave Bear", "Alpha Black Bear", "Brown Bear", "Black Bear", "White Rabbit", "Grey Rabbit", "Rabbit", "Reindeer", "Deer"},
+	Default = 1, 
+	Multi = false, 
+
+	Text = 'Select meat farm',
+	Tooltip = '', 
+
+})
+
+LeftRandomBox:AddToggle('MeatFarmToggle', {
+	Text = "Toggle meat farm",
+	Tooltip = "Automatically gives meat",
+	Default = false,
+	Callback = function(Value)
+		if Value then
+			MeatToggle = task.spawn(function()
+				while task.wait(0.1) do
+					local args = {
+						[1] = Options.MeatType.Value
+					}
+
+					game:GetService("ReplicatedStorage"):WaitForChild("RS"):WaitForChild("Remotes"):WaitForChild("Misc"):WaitForChild("BirdKill"):FireServer(unpack(args))
+				end
+			end)
+			
+		else
+			disableFunctions["MeatFarmToggle"]()
+		end
+	end,
+})
+
+LeftRandomBox:AddInput('ItemToSell', {
+	Text = "Item to sell",
+	Tooltip = 'Sells all of item',
+	Default = '',
+	Finished = true
+})
+
+LeftRandomBox:AddButton({
+	Text = 'Sell nearest npc',
+	Tooltip = 'Sells all of item to nearest npc (need to be close)',
+	Func = function()
+		local shopkeepers = workspace.NPCs:QueryDescendants(">Model>Model:has(>Folder#Attributes:has(>Folder#ShopItems))")
+		local itemToSell = Options.ItemToSell.Value
+		print(itemToSell)
+		local hrp = character.HumanoidRootPart
+		local prompt 
+
+		for _, v in ipairs(game.ReplicatedStorage.RS.Remotes.Misc.GetSellItems:InvokeServer()) do
+			if v:match(itemToSell) then
+				prompt = v
+			end
+		end
+
+		local amount = HttpService:JSONDecode(prompt).Amount
+
+
+		for i, shop in ipairs(shopkeepers) do
+
+			if not shop:FindFirstChild("Attributes") or not shop.Attributes:FindFirstChild("ShopBalance") then
+				continue
+			end
+			if (hrp.Position - shop.WorldPivot.Position).Magnitude > 10 then
+				continue 
+			end
+
+			while shop.Attributes.ShopBalance.Value > 1000 do
+				if amount <= 0 then
+					return
+				end
+				if (hrp.Position - shop.WorldPivot.Position).Magnitude > 10 then
+					break 
+				end
+				newPrompt = HttpService:JSONDecode(prompt)
+				newPrompt.Amount = amount
+				prompt = HttpService:JSONEncode(newPrompt)
+				local args = {
+					[1] = shop,
+					[2] = {
+						[1] = prompt
+					},
+					[3] = "One"
+				}
+				task.spawn(function()
+					game.ReplicatedStorage.RS.Remotes.Misc.SellItems:InvokeServer(unpack(args))
+				end)
+				amount = amount - 1
+				task.wait()
+			end
+		end
+
+	end,
+})
+
+LeftRandomBox:AddInput('Deckhand', {
+	Text = "Insert Deckhand Number",
+	Tooltip = 'Insert deckhand number to change task',
+	Default = '',
+	Numeric = true,
+	Finished = true
+})
+
+LeftRandomBox:AddInput('DeckhandTask', {
+	Text = "Insert Deckhand task",
+	Tooltip = 'Insert task to give to deckhand',
+	Default = '',
+	Finished = true
+})
+
+LeftRandomBox:AddButton({
+	Text = "Give task",
+	Tooltip = "Gives inserted task to deckhand",
+	Func = function()
+		local args = {
+			tostring(Options.Deckhand.Value),
+			"CommandTask",
+			Options.DeckhandTask.Value
+		}
+		game:GetService("ReplicatedStorage"):WaitForChild("RS"):WaitForChild("Remotes"):WaitForChild("Boats"):WaitForChild("Castaway"):FireServer(unpack(args))
+	end,
+})
+
+LeftRandomBox:AddButton({
+	Text = "Restock Supplies",
+	Tooltip = "Restock fleet supplies",
+	Func = function()
+		local args = {
+			"1",
+			"FleetResupply"
+		}
+		game:GetService("ReplicatedStorage"):WaitForChild("RS"):WaitForChild("Remotes"):WaitForChild("Boats"):WaitForChild("Castaway"):FireServer(unpack(args))
+	end,
+})
 
 Library:OnUnload(function()
 	for _, func in pairs(disableFunctions) do
